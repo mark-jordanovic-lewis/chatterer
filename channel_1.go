@@ -45,7 +45,9 @@ type chatterer struct{
   name string
   port int
   client *http.Client
-  clearance int
+  serverChannel chan interface{}   // have to do some clever stuff here to extract what type is sent
+  discussionsPort chan interface{} // have to do some clever stuff here to extract what type is sent
+  quit chan bool
   friends map[string][]struct{
     port int
     suffix string
@@ -53,30 +55,45 @@ type chatterer struct{
   neighbours map[string]<-chan interface{}
 }
 
+// open a listening channel`
 func (self chatterer) listen() {
   http.ListenAndServe(fmt.Sprintf(":%d", self.port), self.mux())
 }
 
-// router \\
-// -------\\
+// run loop for chatterer operations
+func (self *chatterer) runChatterer() {
+  go self.listen()
+  for {
+    select {
+    case <- self.quit:
+      return
+    case body := <- self.serverChannel:
+      fmt.Printf("%s got %v", self.name, body)
+    }
+  }
+}
+
+// router
 func (self chatterer) mux() *http.ServeMux {
   mux := http.NewServeMux()
   mux.Handle(fmt.Sprintf("/%s/", self.name), self)
   return mux
 }
 
+// make chatterer an implementor of Handler interface
 func (self chatterer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
   decoder := json.NewDecoder(req.Body)
-  defer func() { req.Body.Close() }()
   var acceptable_params struct{
     url string
     port int
     suffix string
   }
-  err := decoder.Decode(&acceptable_params)
-  if err != nil { panic(err) }
+  if err := decoder.Decode(&acceptable_params); err != nil {
+    logErrorEvent("INGRESS DECODE ERROR",fmt.Sprintf("Error decoding json: %s", err))
+  } else {
+    io.WriteString(res, fmt.Sprintf("extraction of params performed: ", acceptable_params))
 
-	io.WriteString(res, fmt.Sprintf("action one performed: ", acceptable_params))
+  }
 }
 
 // send because _everything_ is a POST req in my world - <JSON>is the way</JSON>
@@ -89,11 +106,12 @@ func (self chatterer) send(url, suffix string, port int) (*http.Response, error)
   return resp, nil
 }
 
+// helper - build a json body []byte
 func buildBody(url, suffix string, port int) ([]byte, error) {
   var body struct{
-    url string     `json:"url"`
-    port int       `json:"port"`
-    suffix string  `json:"suffix"`
+    url string    `json:"url"`
+    port int      `json:"port"`
+    suffix string `json:"suffix"`
   }
   body.url = url
   body.port = port
@@ -101,24 +119,30 @@ func buildBody(url, suffix string, port int) ([]byte, error) {
   return json.Marshal(body)
 }
 
+// helper - just a wrapper around https request functionality
 func post(url string, body []byte, client *http.Client) (*http.Response, error) {
   req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+  if err != nil { return nil, err }
   req.Header.Set("Content-Type", "application/json")
   resp, err := client.Do(req)
   if err != nil { return nil, err }
   return resp, nil
 }
 
-// ================= \\
-// Channel functions \\
-// ================= \\
-func conductor(chan_one chan chatterer, chan_two chan chatterer, kill chan bool) {
+// =================== \\
+// Conductor functions \\
+// =================== \\
+// can use this for a map or slice of discussions:
+//   discussions := []conductor{ monologue, dialogue, ..., forum }
+type conductor func(chan chatterer, chan chatterer, chan bool)
+
+func dialogue(chan_one chan chatterer, chan_two chan chatterer, kill chan bool) {
   for {
     select {
     case one := <- chan_one:
-      fmt.Println(one.name, "has a clearance of", one.clearance , "found in one")
+      fmt.Println(one.name, "is listening on", one.port , "found in one")
     case two := <- chan_two:
-      fmt.Println(two.name, "has a clearance of", two.clearance, "found in two")
+      fmt.Println(two.name, "is listening on", two.port, "found in two")
     case <- kill:
       return
     default:
