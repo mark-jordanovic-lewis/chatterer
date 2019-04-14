@@ -24,9 +24,7 @@ func (self Composure) ServeHTTP(res http.ResponseWriter, req *http.Request) {
     logErrorEvent("INGRESS DECODE ERROR",fmt.Sprintf("Error decoding json: %s", err))
     io.WriteString(res, fmt.Sprintf("%s", err))
   } else {
-
-    self.serverChannel <- acceptable_params // this blocks, buffer the server channel.
-
+    self.serverChannel <- []interface{}{ acceptable_params }  // this blocks, buffer the server channel.ß
     io.WriteString(res, fmt.Sprintf("extracted_params: %+v", acceptable_params))
   }
 }

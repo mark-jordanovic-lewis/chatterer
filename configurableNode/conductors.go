@@ -25,7 +25,7 @@ func dialogueConductor(self Composure, name string) (func ([]chan []string, chan
       case one := <- channels[0]:
         for _, in_string := range one {
           ping := make(chan []string)
-
+          fmt.Println(in_string)
           // go self.discussions[name]
           reciept := <- ping
           fmt.Printf("recieved: %+v", reciept)
@@ -35,9 +35,15 @@ func dialogueConductor(self Composure, name string) (func ([]chan []string, chan
         fmt.Println("got:", one, "on channel 1")
         // channels[1] <- channels[0]
       case two := <- channels[1]:
-        ping := make(chan string)
+        for _, in_string := range two {
+          ping := make(chan []string)
+          fmt.Println(in_string)
+          // go self.discussions[name]
+          reciept := <- ping
+          fmt.Printf("recieved: %+v", reciept)
+        }
         // parse string in relevant way
-        // send to channel one
+        // send to channel two
         fmt.Println("got:", two, "on channel 2")
         // channels[0] <- channels[1]
       case <- kill:
