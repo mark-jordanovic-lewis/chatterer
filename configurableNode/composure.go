@@ -22,7 +22,7 @@ type Composure struct{
   client *http.Client               // https://golang.org/pkg/net/http/#CookieJar
   serverChannel chan []interface{}       // have to do some clever stuff here to extract what type is sent
   actions map[string][]Action       // have to do some clever stuff here to extract what is sent
-  discussions map[string]Conductor
+  conductors map[string]Conductor
   quit chan bool
   // friends map[string][]struct{
   //   port int
@@ -31,21 +31,21 @@ type Composure struct{
   // neighbours map[string]<-chan []string
 }
 
-func Compose(actions map[string][]Action, discussions map[string]Conductor, quit []chan bool, name string, port int) Composure {
+func Compose(actions map[string][]Action, conductors map[string]Conductor, quit chan bool, name string, port int) Composure {
   return Composure {
     name: name,
     port: 8000,
     client: &http.Client {  },
     serverChannel: make(chan []interface{}),
     actions: actions,
-    discussions: discussions,
+    conductors: conductors,
     quit: make(chan bool),
   }
 }
 // run loop for Composure operations
 func (self  Composure) run(channels map[string][]chan []string) {
   go self.listen()
-  for title, conversation := range self.discussions {
+  for title, conversation := range self.conductors {
     if channel, ok := channels[title]; ok { conversation(&self, title)(channel, self.quit) }
   }
   // need to know what to do about boot strapping the workers
